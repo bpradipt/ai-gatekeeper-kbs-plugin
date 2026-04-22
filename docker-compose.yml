@@ -1,0 +1,27 @@
+services:
+  opa:
+    image: openpolicyagent/opa:1.15.2-static
+    command:
+      - run
+      - --server
+      - --addr
+      - ":8181"
+      - --log-level
+      - error
+      - /policy/policy.rego
+    volumes:
+      - ${POLICY:-./policy.rego}:/policy/policy.rego:ro
+    restart: on-failure
+
+  ai-gatekeeper:
+    image: ${IMAGE:-ai-gatekeeper}
+    ports:
+      - "50051:50051"
+    environment:
+      AI_GATEKEEPER_CONFIG: /etc/ai-gatekeeper/config.yaml
+    volumes:
+      - ${CONFIG:-./config.yaml}:/etc/ai-gatekeeper/config.yaml:ro
+    depends_on:
+      opa:
+        condition: service_started
+    restart: on-failure

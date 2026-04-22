@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-gatekeeper"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "kbs-plugin-sdk-python @ git+https://github.com/confidential-devhub/kbs-plugin-sdk-python@c30bc4c158b9bef4a2364184e0663eed555c1933",
+    "pydantic>=2.0",
+    "pyyaml",
+    "PyJWT[crypto]>=2.8",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "cryptography>=42",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ai_gatekeeper*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

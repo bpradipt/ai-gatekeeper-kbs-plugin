@@ -1,0 +1,28 @@
+[http_server]
+sockets = ["0.0.0.0:8080"]
+insecure_http = true
+
+[admin]
+type = "InsecureAllowAll"
+
+[attestation_token]
+insecure_key = true
+
+[attestation_service]
+type = "coco_as_builtin"
+
+[attestation_service.attestation_token_broker]
+duration_min = 5
+
+[attestation_service.attestation_token_broker.signer]
+key_path = "/opt/confidential-containers/kbs/user-keys/token.key"
+cert_path = "/opt/confidential-containers/kbs/user-keys/token-cert-chain.pem"
+
+[attestation_service.rvps_config]
+type = "BuiltIn"
+
+[[plugins]]
+name = "external"
+backends = [
+  { name = "ai-gatekeeper", endpoint = "http://ai-gatekeeper:50051", tls_mode = "insecure", timeout_ms = 10000 },
+]

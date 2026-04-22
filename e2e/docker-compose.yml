@@ -1,0 +1,101 @@
+services:
+  setup:
+    image: alpine/openssl
+    entrypoint: /bin/ash
+    command: >
+      -c "
+        cd /keys
+        if [ ! -s token.key ]; then
+          openssl genrsa -traditional -out ca.key 2048
+          openssl req -new -key ca.key -out ca-req.csr -subj '/O=Test/OU=e2e/CN=test-root'
+          openssl req -x509 -days 3650 -key ca.key -in ca-req.csr -out ca-cert.pem
+          openssl ecparam -name prime256v1 -genkey -noout -out token.key
+          openssl req -new -key token.key -out token-req.csr -subj '/O=Test/OU=e2e/CN=test-as'
+          openssl x509 -req -in token-req.csr -CA ca-cert.pem -CAkey ca.key -CAcreateserial -out token-cert.pem
+          cat token-cert.pem ca-cert.pem > token-cert-chain.pem
+        fi
+        if [ ! -s plugin-token.key ]; then
+          openssl genrsa -out plugin-token.key 2048
+          openssl req -new -x509 -key plugin-token.key -out plugin-token-cert.pem -days 365 -subj '/CN=test-plugin'
+        fi
+        if [ ! -s tee.key ]; then
+          openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out tee.key
+        fi
+        if [ ! -s kc-secret ]; then
+          printf 'test-secret' > kc-secret
+        fi"
+    volumes:
+      - keys:/keys
+
+  mock-keycloak:
+    image: python:3.12-slim
+    volumes:
+      - ./mock-keycloak.py:/app/server.py:ro
+    command: python /app/server.py
+    restart: on-failure
+
+  opa:
+    image: openpolicyagent/opa:1.15.2-static
+    command:
+      - run
+      - --server
+      - --addr
+      - ":8181"
+      - --log-level
+      - error
+      - /policy/policy.rego
+    volumes:
+      - ./policy.rego:/policy/policy.rego:ro
+    restart: on-failure
+
+  ai-gatekeeper:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "50051:50051"
+    environment:
+      AI_GATEKEEPER_CONFIG: /etc/ai-gatekeeper/config.yaml
+    volumes:
+      - keys:/keys:ro
+      - ./config/plugin-config.yaml:/etc/ai-gatekeeper/config.yaml:ro
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      mock-keycloak:
+        condition: service_started
+      opa:
+        condition: service_started
+    restart: on-failure
+
+  kbs:
+    build:
+      context: .
+      dockerfile: Dockerfile.kbs
+    command:
+      - /usr/local/bin/kbs
+      - --config-file
+      - /etc/kbs/kbs.toml
+    environment:
+      RUST_LOG: "${RUST_LOG:-info}"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/kbs.toml:/etc/kbs/kbs.toml:ro
+      - keys:/opt/confidential-containers/kbs/user-keys:ro
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      ai-gatekeeper:
+        condition: service_started
+    restart: on-failure
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-runner
+    volumes:
+      - keys:/keys:ro
+
+volumes:
+  keys:

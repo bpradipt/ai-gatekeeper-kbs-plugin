@@ -1,0 +1,39 @@
+# NOTE: The hostnames below (keycloak, llama-8b, llama-70b, opa) are Docker Compose
+# service names and must be replaced with real hostnames or IP addresses in production.
+#
+# jwt_verification: KBS does not expose a JWKS endpoint, so token_cert_path must
+# be used for KBS-issued attestation tokens. Distribute the KBS token signing cert
+# (token-cert-chain.pem) to the plugin and point token_cert_path at it.
+#
+# audience: set to "" to skip audience validation (insecure — logs a warning).
+# For KBS-issued tokens the audience is typically "kbs".
+#
+# leeway_seconds: accept tokens that expired up to N seconds ago, to tolerate
+# clock skew between the KBS signing service and the plugin host.
+#
+# opa_url: base URL of the OPA HTTP server (run as a sidecar).
+# The plugin appends /v1/data/ai_gatekeeper/allow.
+jwt_verification:
+  token_cert_path: "/run/secrets/kbs-token-cert-chain.pem"
+  audience: "kbs"
+  leeway_seconds: 10
+
+keycloak:
+  url: "https://keycloak:8080"
+  realm: "ai-models"
+  client_id: "ai-gatekeeper"
+  client_secret_path: "/run/secrets/kc-secret"
+  timeout_seconds: 10
+
+models:
+  llama-8b:
+    endpoint: "https://llama-8b:8080"
+    scope: "model:llama-8b"
+  llama-70b:
+    endpoint: "https://llama-70b:8080"
+    scope: "model:llama-70b"
+
+opa_url: "http://opa:8181"
+
+server:
+  address: "0.0.0.0:50051"
