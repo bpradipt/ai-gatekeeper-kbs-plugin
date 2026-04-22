@@ -1,0 +1,24 @@
+jwt_verification:
+  token_cert_path: /keys/plugin-token-cert.pem
+  audience: ""
+  leeway_seconds: 10
+
+keycloak:
+  url: http://keycloak:8080
+  realm: ai-models
+  client_id: ai-gatekeeper
+  client_secret_path: /run/secrets/kc-secret
+  timeout_seconds: 10
+
+models:
+  llama-8b:
+    endpoint: https://llama-8b:8080
+    scope: llama-8b
+  llama-70b:
+    endpoint: https://llama-70b:8080
+    scope: llama-70b
+
+opa_url: "http://opa:8181"
+
+server:
+  address: 0.0.0.0:50051

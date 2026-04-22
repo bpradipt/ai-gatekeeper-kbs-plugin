@@ -1,0 +1,116 @@
+services:
+  setup:
+    image: alpine/openssl
+    entrypoint: /bin/ash
+    command: >
+      -c "
+        cd /keys
+        if [ ! -s token.key ]; then
+          openssl genrsa -traditional -out ca.key 2048
+          openssl req -new -key ca.key -out ca-req.csr -subj '/O=Demo/OU=demo/CN=demo-root'
+          openssl req -x509 -days 3650 -key ca.key -in ca-req.csr -out ca-cert.pem
+          openssl ecparam -name prime256v1 -genkey -noout -out token.key
+          openssl req -new -key token.key -out token-req.csr -subj '/O=Demo/OU=demo/CN=demo-as'
+          openssl x509 -req -in token-req.csr -CA ca-cert.pem -CAkey ca.key -CAcreateserial -out token-cert.pem
+          cat token-cert.pem ca-cert.pem > token-cert-chain.pem
+        fi
+        if [ ! -s plugin-token.key ]; then
+          openssl genrsa -out plugin-token.key 2048
+          openssl req -new -x509 -key plugin-token.key -out plugin-token-cert.pem -days 365 -subj '/CN=demo-plugin'
+        fi
+        if [ ! -s tee.key ]; then
+          openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out tee.key
+        fi"
+    volumes:
+      - keys:/keys
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.1
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_LOG_LEVEL: "INFO,org.keycloak:DEBUG"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./config/realm.json:/opt/keycloak/data/import/realm.json:ro
+    healthcheck:
+      # Keycloak image has no curl; use /dev/tcp against management port 9000.
+      # /health/ready returns 200 only after full init including realm import.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '200 OK' <(head -1 <&3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  opa:
+    image: openpolicyagent/opa:1.15.2-static
+    command:
+      - run
+      - --server
+      - --addr
+      - ":8181"
+      - --log-level
+      - debug
+      - /policy/policy.rego
+    volumes:
+      - ./policy.rego:/policy/policy.rego:ro
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    restart: on-failure
+
+  ai-gatekeeper:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "50051:50051"
+    environment:
+      AI_GATEKEEPER_CONFIG: /etc/ai-gatekeeper/config.yaml
+    volumes:
+      - keys:/keys:ro
+      - ./config/plugin-config.yaml:/etc/ai-gatekeeper/config.yaml:ro
+      - ./secrets/kc-secret:/run/secrets/kc-secret:ro
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+      opa:
+        condition: service_started
+    restart: on-failure
+
+  kbs:
+    build:
+      context: .
+      dockerfile: Dockerfile.kbs
+    command:
+      - /usr/local/bin/kbs
+      - --config-file
+      - /etc/kbs/kbs.toml
+    environment:
+      RUST_LOG: "${RUST_LOG:-info}"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/kbs.toml:/etc/kbs/kbs.toml:ro
+      - keys:/opt/confidential-containers/kbs/user-keys:ro
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      ai-gatekeeper:
+        condition: service_started
+    restart: on-failure
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-runner
+    volumes:
+      - keys:/keys:ro
+
+volumes:
+  keys:

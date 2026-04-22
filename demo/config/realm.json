@@ -1,0 +1,45 @@
+{
+  "id": "ai-models",
+  "realm": "ai-models",
+  "displayName": "AI Models",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "bruteForceProtected": false,
+  "clientScopes": [
+    {
+      "name": "llama-8b",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "llama-70b",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "ai-gatekeeper",
+      "name": "AI Gatekeeper",
+      "description": "Service account for AI model access control",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "demo-secret-change-me",
+      "defaultClientScopes": [],
+      "optionalClientScopes": ["llama-8b", "llama-70b"]
+    }
+  ]
+}
