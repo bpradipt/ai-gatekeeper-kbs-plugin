@@ -6,19 +6,26 @@ TEE workloads attest to KBS, then call this plugin to get a scoped access token 
 
 ## Request Flow
 
-```
-TEE client
-  -> POST /kbs/v0/external/ai-gatekeeper/models/<model>
-     body: {"token": "<kbs-attestation-jwt>"}
-     Authorization: Bearer <kbs-attestation-token>
-  -> KBS (validates attestation, evaluates resource policy)
-  -> plugin gRPC Handle()
-       1. Verify JWT (RS256/ES256 via token signing cert)
-       2. Evaluate Rego policy (role -> allowed models)
-       3. Fetch Keycloak client_credentials token (scoped to model)
-       4. Return {"endpoint": "...", "access_token": "..."}
-  -> KBS JWE-encrypts response with TEE ephemeral key
-  -> TEE client decrypts, calls model endpoint with access token
+```mermaid
+sequenceDiagram
+    participant T as TEE client
+    participant K as KBS
+    participant P as ai-gatekeeper plugin
+    participant KC as Keycloak
+    participant M as Model endpoint
+
+    T->>K: POST /kbs/v0/external/ai-gatekeeper/models/<model><br/>body: {"token": "<kbs-attestation-jwt>"}<br/>Authorization: Bearer <kbs-attestation-token>
+    K->>K: Validate TEE attestation & resource policy
+    K->>P: gRPC Handle(request)
+    P->>P: 1. Verify JWT (RS256/ES256 via token signing cert)
+    P->>P: 2. Evaluate Rego policy (role → allowed models)
+    P->>KC: 3. client_credentials grant (model-scoped)
+    KC-->>P: access_token
+    P-->>K: {"endpoint": "...", "access_token": "..."}
+    K->>K: JWE-encrypt response with TEE ephemeral key
+    K-->>T: encrypted response
+    T->>T: Decrypt response
+    T->>M: Request with access_token
 ```
 
 ## Authentication Layers
