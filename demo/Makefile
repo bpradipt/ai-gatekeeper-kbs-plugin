@@ -1,6 +1,6 @@
 COMPOSE := docker compose
 
-.PHONY: up down test demo logs
+.PHONY: up down test demo demo-client logs
 
 up:
 	$(COMPOSE) up -d --build
@@ -15,6 +15,9 @@ demo:
 	$(COMPOSE) down -v --remove-orphans
 	$(COMPOSE) up -d --build
 	bash tests/demo.sh; EXIT=$$?; $(COMPOSE) down -v --remove-orphans; exit $$EXIT
+
+demo-client:
+	$(COMPOSE) run --rm demo-client
 
 logs:
 	$(COMPOSE) logs -f

@@ -1,0 +1,39 @@
+# rust:1.90.0 — same image as Dockerfile.kbs; layer cache shared when both are built
+FROM --platform=${BUILDPLATFORM:-linux/amd64} \
+    docker.io/library/rust@sha256:e227f20ec42af3ea9a3c9c1dd1b2012aa15f12279b5e9d5fb890ca1c2bb5726c \
+    AS builder
+ARG ARCH=x86_64
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    clang \
+    cmake \
+    curl \
+    git \
+    libclang-dev \
+    libprotobuf-dev \
+    libssl-dev \
+    libtss2-dev \
+    make \
+    perl \
+    pkg-config \
+    protobuf-compiler && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/trustee
+RUN git clone --depth=1 https://github.com/confidential-containers/trustee.git .
+RUN cargo build -p kbs-client --release && \
+    install target/release/kbs-client /usr/local/bin/kbs-client
+
+FROM python:3.12-slim
+RUN pip install --no-cache-dir \
+    'PyJWT[crypto]' \
+    cryptography \
+    jwcrypto \
+    httpx
+COPY --from=builder /usr/local/bin/kbs-client /usr/local/bin/kbs-client
+COPY demo-client.py /app/demo-client.py
+WORKDIR /app
+ENTRYPOINT ["python", "demo-client.py"]

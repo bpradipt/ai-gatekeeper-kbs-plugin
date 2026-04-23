@@ -130,5 +130,21 @@ services:
     volumes:
       - keys:/keys:ro
 
+  demo-client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    volumes:
+      - keys:/keys:ro
+    depends_on:
+      kbs:
+        condition: service_started
+      llama-8b:
+        condition: service_started
+      llama-70b:
+        condition: service_started
+    profiles:
+      - demo
+
 volumes:
   keys:
