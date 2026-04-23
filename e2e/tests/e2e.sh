@@ -3,7 +3,8 @@
 #
 # Runs on the host. curl talks to KBS at localhost:8080 (port-forwarded).
 # kbs-client runs inside the kbs container for attestation.
-# Plugin JWTs are generated via a one-shot docker compose run (PyJWT).
+# The KBS attestation JWT is used as both Bearer and body token — no separate
+# JWT signing key or test-runner service needed.
 set -euo pipefail
 
 KBS_URL="${KBS_URL:-http://localhost:8080}"
@@ -45,69 +46,88 @@ wait_for_kbs
 echo "Configuring KBS resource policy..."
 setup_policy
 
-echo "Obtaining KBS attestation token via kbs-client..."
-KBS_TOKEN=$(docker compose exec -T kbs kbs-client \
+# Attest twice with different initdata TOML blocks to produce tokens whose
+# init_data_claims carry different roles in the Rego policy.
+# The same JWT is used as both Bearer (KBS TEE attestation) and body token
+# (plugin EAR claim normalization and role derivation).
+echo "Obtaining KBS attestation token with basic role (initdata TOML)..."
+KBS_TOKEN_BASIC=$(docker compose exec -T kbs kbs-client \
     --url http://localhost:8080 \
     attest \
-    --tee-key-file /opt/confidential-containers/kbs/user-keys/tee.key)
+    --tee-key-file /opt/confidential-containers/kbs/user-keys/tee.key \
+    'version = "0.1.0"
+algorithm = "sha256"
 
-echo "Pre-generating plugin JWTs..."
-{ read -r JWT_BASIC; read -r JWT_PREMIUM; } < <(
-    docker compose run --no-deps --rm test-runner python3 -c "
-import time
-import jwt as pyjwt
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
-with open('/keys/plugin-token.key', 'rb') as f:
-    key = load_pem_private_key(f.read(), None)
-exp = int(time.time()) + 300
-for role in ['basic', 'premium']:
-    print(pyjwt.encode({'role': role, 'sub': 'tee-1', 'exp': exp}, key, algorithm='RS256'))
-" 2>/dev/null
-)
+[data]
+"aa.toml" = """
+[token_configs.kbs]
+url = "http://localhost:8080"
+
+[extra]
+role = "basic"
+"""
+')
+
+echo "Obtaining KBS attestation token with premium role (initdata TOML)..."
+KBS_TOKEN_PREMIUM=$(docker compose exec -T kbs kbs-client \
+    --url http://localhost:8080 \
+    attest \
+    --tee-key-file /opt/confidential-containers/kbs/user-keys/tee.key \
+    'version = "0.1.0"
+algorithm = "sha256"
+
+[data]
+"aa.toml" = """
+[token_configs.kbs]
+url = "http://localhost:8080"
+
+[extra]
+role = "premium"
+"""
+')
 
 echo ""
 echo "Running e2e tests against $KBS_URL"
 echo ""
 
-echo "--- basic + llama-8b -> 200 ---"
+echo "--- basic init-data + llama-8b -> 200 ---"
 status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-    -H "Authorization: Bearer $KBS_TOKEN" \
+    -H "Authorization: Bearer $KBS_TOKEN_BASIC" \
     -H "Content-Type: application/json" \
-    -d "{\"token\":\"$JWT_BASIC\"}" \
+    -d "{\"token\":\"$KBS_TOKEN_BASIC\"}" \
     "$(url llama-8b)")
 [[ "$status" == "200" ]] && pass "basic role accepted for llama-8b" || fail "expected 200, got $status"
 
-# KBS normalizes all non-2xx plugin responses to 401 (per ext_plugin.md:
-# "Non-2xx causes KBS to treat the call as a plugin error, caller receives 401").
+# KBS normalizes all non-2xx plugin responses to 401 (per ext_plugin.md).
 # Specific codes (403, 404, 400) are logged server-side and covered by unit tests.
 
-echo "--- basic + llama-70b -> 401 (plugin: 403 policy deny) ---"
+echo "--- basic init-data + llama-70b -> 401 (plugin: 403 policy deny) ---"
 status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-    -H "Authorization: Bearer $KBS_TOKEN" \
+    -H "Authorization: Bearer $KBS_TOKEN_BASIC" \
     -H "Content-Type: application/json" \
-    -d "{\"token\":\"$JWT_BASIC\"}" \
+    -d "{\"token\":\"$KBS_TOKEN_BASIC\"}" \
     "$(url llama-70b)")
 [[ "$status" == "401" ]] && pass "basic role denied llama-70b (KBS->401)" || fail "expected 401, got $status"
 
-echo "--- premium + llama-70b -> 200 ---"
+echo "--- premium init-data + llama-70b -> 200 ---"
 status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-    -H "Authorization: Bearer $KBS_TOKEN" \
+    -H "Authorization: Bearer $KBS_TOKEN_PREMIUM" \
     -H "Content-Type: application/json" \
-    -d "{\"token\":\"$JWT_PREMIUM\"}" \
+    -d "{\"token\":\"$KBS_TOKEN_PREMIUM\"}" \
     "$(url llama-70b)")
 [[ "$status" == "200" ]] && pass "premium role accepted for llama-70b" || fail "expected 200, got $status"
 
 echo "--- unknown model -> 401 (plugin: 404) ---"
 status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-    -H "Authorization: Bearer $KBS_TOKEN" \
+    -H "Authorization: Bearer $KBS_TOKEN_BASIC" \
     -H "Content-Type: application/json" \
-    -d "{\"token\":\"$JWT_BASIC\"}" \
+    -d "{\"token\":\"$KBS_TOKEN_BASIC\"}" \
     "$(url unknown-model)")
 [[ "$status" == "401" ]] && pass "unknown model rejected (KBS->401)" || fail "expected 401, got $status"
 
 echo "--- missing token -> 401 (plugin: 400) ---"
 status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-    -H "Authorization: Bearer $KBS_TOKEN" \
+    -H "Authorization: Bearer $KBS_TOKEN_BASIC" \
     -H "Content-Type: application/json" \
     -d "{}" \
     "$(url llama-8b)")
