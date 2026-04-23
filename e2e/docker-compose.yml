@@ -14,10 +14,6 @@ services:
           openssl x509 -req -in token-req.csr -CA ca-cert.pem -CAkey ca.key -CAcreateserial -out token-cert.pem
           cat token-cert.pem ca-cert.pem > token-cert-chain.pem
         fi
-        if [ ! -s plugin-token.key ]; then
-          openssl genrsa -out plugin-token.key 2048
-          openssl req -new -x509 -key plugin-token.key -out plugin-token-cert.pem -days 365 -subj '/CN=test-plugin'
-        fi
         if [ ! -s tee.key ]; then
           openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out tee.key
         fi
@@ -89,13 +85,6 @@ services:
       ai-gatekeeper:
         condition: service_started
     restart: on-failure
-
-  test-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile.test-runner
-    volumes:
-      - keys:/keys:ro
 
 volumes:
   keys:

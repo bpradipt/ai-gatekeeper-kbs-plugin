@@ -2,16 +2,13 @@ COMPOSE := docker compose
 
 .PHONY: build build-kbs build-plugin up down test logs
 
-build: build-kbs build-plugin build-test-runner
+build: build-kbs build-plugin
 
 build-kbs:
 	$(COMPOSE) build kbs
 
 build-plugin:
 	$(COMPOSE) build ai-gatekeeper
-
-build-test-runner:
-	$(COMPOSE) build test-runner
 
 up:
 	$(COMPOSE) up -d
