@@ -4,6 +4,14 @@ An external plugin for the [Trustee Key Broker Service (KBS)](https://github.com
 
 After attesting to KBS, a TEE workload calls this plugin to obtain a scoped access token and endpoint URL for a specific AI model. The plugin independently verifies the KBS-issued attestation JWT, evaluates a Rego policy against the JWT claims (supporting both role-based and measurement-based rules), and exchanges a Keycloak service account credential for a model-scoped token.
 
+## Demo
+
+The demo below shows a TEE workload attesting to KBS, receiving a Keycloak-issued access token scoped to a specific model through the encrypted KBS response, and calling the model endpoint directly with that token. It also shows the failure scenarios: policy deny, unknown model, tampered token, and wrong scope.
+
+![AI Gatekeeper demo](docs/demo.gif)
+
+See [`demo/README.md`](demo/README.md) for how to run it locally.
+
 ## Request Flow
 
 ```mermaid
