@@ -9,22 +9,28 @@ stable interface that Rego policies can query without knowing the EAR
 structure.
 
 Normalized output fields (the operator contract):
-  tee_type        str | None  TEE platform: "sample" | "tdx" | "snp" | "sgx" | ...
-  ear_status      str | None  EAR verdict: "affirming" | "warning" | "contraindicated"
-  init_data_hash  str | None  base64url SHA-256 of the init-data blob passed at
-                              attestation time; None if not provided.
-                              On real hardware (TDX/SNP) this hash is
-                              cryptographically bound to the TEE evidence.
-  measurement     str | None  Primary measurement register, TEE-type-specific:
-                                sample → launch_digest
-                                tdx    → mr_td   (verify path against real TDX EAR)
-                                snp    → measurement
-                                sgx    → mrenclave
-                              None for unknown TEE types.
-  debug           bool | None debug mode flag from TEE evidence; None if absent.
+  tee_type         str | None   TEE platform: "sample" | "tdx" | "snp" | "sgx" | ...
+  ear_status       str | None   EAR verdict: "affirming" | "warning" | "contraindicated"
+  init_data_hash   str | None   base64url SHA-256 of the initdata blob (from the hardware
+                                register: mr_config_id on TDX, hostdata on SNP, PCR[8] on
+                                vTPM). None if no initdata was provided.
+  init_data_claims dict | None  Parsed content of the initdata TOML, present only when the
+                                client passes the initdata plaintext to KBS at attestation
+                                time. Contains sub-keys matching the [data] section of the
+                                initdata TOML (e.g. "aa.toml", "cdh.toml"). Custom fields
+                                placed inside those config files are preserved. Example:
+                                  init_data_claims["aa.toml"]["extra"]["role"] == "basic"
+                                Works identically on sample TEE, TDX, SNP, and vTPM.
+  measurement      str | None   Primary measurement register, TEE-type-specific:
+                                  sample → launch_digest
+                                  tdx    → mr_td   (verify path against real TDX EAR)
+                                  snp    → measurement
+                                  sgx    → mrenclave
+                                None for unknown TEE types.
+  debug            bool | None  debug mode flag from TEE evidence; None if absent.
 
 All fields default to None on parse error — a malformed EAR payload causes
-deny (no init_data_hash matches any role_map entry in Rego).
+deny (no init_data_claims match in Rego).
 """
 
 _EXCLUDED_EVIDENCE_KEYS = frozenset({
@@ -50,6 +56,7 @@ def normalize_ear_claims(ear_claims: dict) -> dict:
         "tee_type": None,
         "ear_status": None,
         "init_data_hash": None,
+        "init_data_claims": None,
         "measurement": None,
         "debug": None,
     }
@@ -74,6 +81,7 @@ def normalize_ear_claims(ear_claims: dict) -> dict:
             "tee_type": tee_type,
             "ear_status": cpu0.get("ear.status"),
             "init_data_hash": evidence.get("init_data"),
+            "init_data_claims": evidence.get("init_data_claims"),
             "measurement": tee_ev.get(measurement_key) if measurement_key else None,
             "debug": tee_ev.get("debug"),
         }

@@ -8,6 +8,7 @@ from kbs_plugin_sdk import (
 )
 
 from ai_gatekeeper.config import Config
+from ai_gatekeeper.ear_normalizer import normalize_ear_claims
 from ai_gatekeeper.jwt_verifier import JwtVerifier
 from ai_gatekeeper.keycloak_client import KeycloakClient
 from ai_gatekeeper.rego_evaluator import RegoEvaluator
@@ -43,21 +44,25 @@ class GatekeeperHandler(PluginHandler):
             return PluginResponse(body=b"missing token", status_code=400)
 
         try:
-            claims = self._verifier.verify(token)
+            ear_claims = self._verifier.verify(token)
         except Exception as exc:
             logger.warning("model=%s rejected: token verification failed: %s", model_name, exc)
             return PluginResponse(body=b"invalid token", status_code=401)
 
-        subject = claims.get("sub", "<no-sub>")
+        # Flatten EAR structure into the documented operator-facing claims dict.
+        # Rego policy receives only these fields — see ear_normalizer.py for the
+        # full field reference and TEE-type-specific source paths.
+        normalized = normalize_ear_claims(ear_claims)
+        subject = normalized.get("tee_type") or "<unknown-tee>"
 
-        if not await self._rego.allow(claims, model_name):
-            logger.info("decision=deny sub=%s model=%s reason=policy", subject, model_name)
+        if not await self._rego.allow(normalized, model_name):
+            logger.info("decision=deny tee=%s model=%s reason=policy", subject, model_name)
             return PluginResponse(body=b"access denied", status_code=403)
 
         model = self._config.models.get(model_name)
         if model is None:
             logger.warning(
-                "decision=deny sub=%s model=%s reason=unknown-model (policy allowed but model not in config)",
+                "decision=deny tee=%s model=%s reason=unknown-model (policy allowed but model not in config)",
                 subject, model_name,
             )
             return PluginResponse(body=b"unknown model", status_code=404)
@@ -65,9 +70,9 @@ class GatekeeperHandler(PluginHandler):
         try:
             access_token = await self._kc.get_token(model.scope)
         except Exception as exc:
-            logger.error("decision=error sub=%s model=%s reason=upstream: %s", subject, model_name, exc)
+            logger.error("decision=error tee=%s model=%s reason=upstream: %s", subject, model_name, exc)
             return PluginResponse(body=b"upstream error", status_code=502)
 
-        logger.info("decision=allow sub=%s model=%s endpoint=%s", subject, model_name, model.endpoint)
+        logger.info("decision=allow tee=%s model=%s endpoint=%s", subject, model_name, model.endpoint)
         out = json.dumps({"endpoint": model.endpoint, "access_token": access_token})
         return PluginResponse(body=out.encode(), status_code=200)

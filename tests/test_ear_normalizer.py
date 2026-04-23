@@ -60,6 +60,21 @@ def test_init_data_hash_absent_is_none():
     assert result["init_data_hash"] is None
 
 
+def test_init_data_claims_present():
+    claims = {"aa.toml": {"extra": {"role": "basic"}}}
+    ear = _ear("sample", {"launch_digest": "abcde"}, init_data="abc123")
+    # inject init_data_claims into annotated evidence
+    ear["submods"]["cpu0"]["ear.veraison.annotated-evidence"]["init_data_claims"] = claims
+    result = normalize_ear_claims(ear)
+    assert result["init_data_claims"] == claims
+
+
+def test_init_data_claims_absent_is_none():
+    ear = _ear("sample", {"launch_digest": "abcde"})
+    result = normalize_ear_claims(ear)
+    assert result["init_data_claims"] is None
+
+
 def test_debug_absent_is_none():
     ear = _ear("sample", {"launch_digest": "abcde"})
     result = normalize_ear_claims(ear)
@@ -119,6 +134,7 @@ def test_empty_dict_returns_all_none():
         "tee_type": None,
         "ear_status": None,
         "init_data_hash": None,
+        "init_data_claims": None,
         "measurement": None,
         "debug": None,
     }
@@ -130,6 +146,7 @@ def test_malformed_submods_returns_all_none():
         "tee_type": None,
         "ear_status": None,
         "init_data_hash": None,
+        "init_data_claims": None,
         "measurement": None,
         "debug": None,
     }
