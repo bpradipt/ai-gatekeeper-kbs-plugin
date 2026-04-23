@@ -1,6 +1,6 @@
 jwt_verification:
-  token_cert_path: /keys/plugin-token-cert.pem
-  audience: ""
+  token_cert_path: /keys/token-cert-chain.pem
+  audience: ""  # set to your KBS issuer URL in production
   leeway_seconds: 10
 
 keycloak:
