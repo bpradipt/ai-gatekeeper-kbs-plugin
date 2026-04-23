@@ -7,7 +7,7 @@ name = "ai-gatekeeper"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "kbs-plugin-sdk-python>=0.1.0",
+    "kbs-plugin-sdk-python>=0.1.0a0",
     "pydantic>=2.0",
     "pyyaml",
     "PyJWT[crypto]>=2.8",
