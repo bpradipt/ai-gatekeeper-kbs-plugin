@@ -1,8 +1,8 @@
 # AI Gatekeeper — KBS External Plugin
 
-An external plugin for the [Trustee Key Broker Service (KBS)](https://github.com/confidential-containers/trustee) that enforces role-based access control for AI model endpoints inside Confidential Computing environments.
+An external plugin for the [Trustee Key Broker Service (KBS)](https://github.com/confidential-containers/trustee) that gates access to AI model endpoints for TEE workloads inside Confidential Computing environments.
 
-TEE workloads attest to KBS, then call this plugin to get a scoped access token and endpoint for a specific AI model. The plugin verifies the client's KBS attestation JWT, evaluates a Rego policy, and exchanges a Keycloak client credential for a model-scoped access token.
+After attesting to KBS, a TEE workload calls this plugin to obtain a scoped access token and endpoint URL for a specific AI model. The plugin independently verifies the KBS-issued attestation JWT, evaluates a Rego policy against the JWT claims (supporting both role-based and measurement-based rules), and exchanges a Keycloak service account credential for a model-scoped token.
 
 ## Request Flow
 
@@ -37,12 +37,23 @@ Two independent layers protect each request:
 
 ## Configuration
 
+The plugin reads a YAML config file. Set the path via `AI_GATEKEEPER_CONFIG` (default: `config.yaml`).
+
+| Section | Purpose |
+|---|---|
+| `jwt_verification` | How to verify the KBS-issued attestation JWT presented by the client |
+| `keycloak` | Service account credentials for fetching model-scoped tokens from Keycloak |
+| `models` | Map of model names to their endpoint URL and Keycloak scope |
+| `opa_url` | Base URL of the OPA HTTP server (run as a sidecar); the plugin POSTs to `<opa_url>/v1/data/ai_gatekeeper/allow` |
+| `server` | gRPC listen address and optional TLS |
+
 ```yaml
 jwt_verification:
   # KBS does not expose a JWKS endpoint. Distribute the KBS token signing cert
-  # (token-cert-chain.pem from the KBS deployment) to the plugin and point here.
+  # (token-cert-chain.pem from the KBS deployment) to the plugin.
   token_cert_path: "/run/secrets/kbs-token-cert-chain.pem"
-  audience: "kbs"          # empty string skips audience check
+  audience: "kbs"       # set to "" to skip audience check (insecure)
+  leeway_seconds: 10    # tolerate up to N seconds of clock skew between KBS and plugin
 
 keycloak:
   url: "https://keycloak:8080"
@@ -59,8 +70,7 @@ models:
     endpoint: "https://llama-70b:8080"
     scope: "model:llama-70b"
 
-rego_policy_path: "/etc/ai-gatekeeper/policy.rego"
-opa_binary: "opa"
+opa_url: "http://opa:8181"   # OPA runs as a sidecar HTTP server
 
 server:
   address: "0.0.0.0:50051"
@@ -70,11 +80,9 @@ server:
   #   key: "/etc/ai-gatekeeper/server.key"
 ```
 
-Set the config path via `AI_GATEKEEPER_CONFIG` (default: `config.yaml`).
-
 ## Rego Policy
 
-Policies live in a separate `.rego` file and are evaluated by OPA. Claims from the verified JWT and the requested model name are available as `input`:
+Policies are loaded into an OPA HTTP server (run as a sidecar). The plugin queries `POST /v1/data/ai_gatekeeper/allow` with the verified JWT claims and the requested model name as `input`:
 
 ```rego
 package ai_gatekeeper
