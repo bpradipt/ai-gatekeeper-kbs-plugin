@@ -20,6 +20,11 @@ pytestmark = pytest.mark.skipif(
     shutil.which("opa") is None, reason="opa binary not found"
 )
 
+# Helper: build the init_data_claims dict for a given role.
+# Mirrors the initdata TOML [data."aa.toml"."extra"] structure.
+def _claims(role: str) -> dict:
+    return {"init_data_claims": {"aa.toml": {"extra": {"role": role}}}}
+
 
 def _allow(claims: dict, model: str) -> bool:
     result = subprocess.run(
@@ -37,42 +42,47 @@ def _allow(claims: dict, model: str) -> bool:
     return result.stdout.strip() == b"true"
 
 
-# ── role-based access ────────────────────────────────────────────────────────
+# ── role-based access via init_data_claims ────────────────────────────────────
 
 def test_basic_allows_llama8b():
-    assert _allow({"role": "basic"}, "llama-8b") is True
+    assert _allow(_claims("basic"), "llama-8b") is True
 
 
 def test_basic_denies_llama70b():
-    assert _allow({"role": "basic"}, "llama-70b") is False
+    assert _allow(_claims("basic"), "llama-70b") is False
 
 
 def test_premium_allows_llama8b():
-    assert _allow({"role": "premium"}, "llama-8b") is True
+    assert _allow(_claims("premium"), "llama-8b") is True
 
 
 def test_premium_allows_llama70b():
-    assert _allow({"role": "premium"}, "llama-70b") is True
+    assert _allow(_claims("premium"), "llama-70b") is True
 
 
 def test_research_allows_llama8b():
-    assert _allow({"role": "research"}, "llama-8b") is True
+    assert _allow(_claims("research"), "llama-8b") is True
 
 
 def test_research_allows_llama70b():
-    assert _allow({"role": "research"}, "llama-70b") is True
+    assert _allow(_claims("research"), "llama-70b") is True
 
 
 def test_unknown_role_denied():
-    assert _allow({"role": "admin"}, "llama-8b") is False
+    assert _allow(_claims("admin"), "llama-8b") is False
 
 
-def test_missing_role_denied():
+def test_missing_init_data_claims_denied():
     assert _allow({}, "llama-8b") is False
 
 
+def test_missing_role_in_extra_denied():
+    claims = {"init_data_claims": {"aa.toml": {"extra": {}}}}
+    assert _allow(claims, "llama-8b") is False
+
+
 def test_any_role_denies_unconfigured_model():
-    assert _allow({"role": "premium"}, "llama-405b") is False
+    assert _allow(_claims("premium"), "llama-405b") is False
 
 
 def test_default_deny_with_empty_input():
@@ -82,32 +92,29 @@ def test_default_deny_with_empty_input():
 # ── TDX measurement override ─────────────────────────────────────────────────
 
 def test_tdx_correct_measurement_allows_research_model():
-    # The placeholder measurement in policy.rego grants research-level access.
-    # In production this value is replaced with the real enclave measurement.
     claims = {
-        "tee": "tdx",
-        "td-attributes": {"mr_td": "replace-with-your-mrtd"},
+        "tee_type": "tdx",
+        "measurement": "replace-with-your-mr-td",
     }
     assert _allow(claims, "llama-70b") is True
 
 
 def test_tdx_wrong_measurement_denied():
     claims = {
-        "tee": "tdx",
-        "td-attributes": {"mr_td": "wrong-measurement"},
+        "tee_type": "tdx",
+        "measurement": "wrong-measurement",
     }
     assert _allow(claims, "llama-70b") is False
 
 
 def test_tdx_correct_measurement_denies_unconfigured_model():
     claims = {
-        "tee": "tdx",
-        "td-attributes": {"mr_td": "replace-with-your-mrtd"},
+        "tee_type": "tdx",
+        "measurement": "replace-with-your-mr-td",
     }
     assert _allow(claims, "llama-405b") is False
 
 
-def test_tdx_rule_requires_tee_claim():
-    # Correct mr_td but no tee=tdx claim must not trigger the TDX override.
-    claims = {"td-attributes": {"mr_td": "replace-with-your-mrtd"}}
+def test_tdx_rule_requires_tee_type_claim():
+    claims = {"measurement": "replace-with-your-mr-td"}
     assert _allow(claims, "llama-70b") is False

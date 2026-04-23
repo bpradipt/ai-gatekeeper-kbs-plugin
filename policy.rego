@@ -4,16 +4,36 @@ import rego.v1
 
 default allow := false
 
-# Role-based access: map role claim to allowed models.
-allow if {
-    allowed_models[input.claims.role][input.model]
+# Role is read from the initdata TOML passed at attestation time.
+# The initdata is cryptographically bound to TEE evidence:
+#   TDX  → mr_config_id   SNP → hostdata   vTPM → PCR[8]
+# On sample TEE (testing only) the hash is not hardware-verified.
+#
+# Initdata format (passed as plaintext to kbs-client attest):
+#   version = "0.1.0"
+#   algorithm = "sha256"
+#   [data]
+#   "aa.toml" = """
+#   [token_configs.kbs]
+#   url = "http://<kbs-host>:<port>"
+#   [extra]
+#   role = "basic"   # or "premium", "research", ...
+#   """
+#
+# See DEPLOYMENT.md for hash computation and per-TEE-type guidance.
+role := r if {
+    r := input.claims.init_data_claims["aa.toml"]["extra"]["role"]
 }
 
-# Measurement-based override: a specific TDX enclave gets research access.
-# Replace mr_td value with your enclave's measurement.
 allow if {
-    input.claims.tee == "tdx"
-    input.claims["td-attributes"].mr_td == "replace-with-your-mrtd"
+    allowed_models[role][input.model]
+}
+
+# Measurement-based override: a specific TDX enclave gets research access
+# regardless of initdata. Replace with your enclave's mr_td value.
+allow if {
+    input.claims.tee_type == "tdx"
+    input.claims.measurement == "replace-with-your-mr-td"
     allowed_models.research[input.model]
 }
 
