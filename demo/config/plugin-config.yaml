@@ -12,10 +12,10 @@ keycloak:
 
 models:
   llama-8b:
-    endpoint: https://llama-8b:8080
+    endpoint: "http://llama-8b:8080"
     scope: llama-8b
   llama-70b:
-    endpoint: https://llama-70b:8080
+    endpoint: "http://llama-70b:8080"
     scope: llama-70b
 
 opa_url: "http://opa:8181"
