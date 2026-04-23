@@ -149,7 +149,7 @@ make run CONFIG=... POLICY=... # run with mounted config and policy
 
 ## SDK
 
-Built on [kbs-plugin-sdk-python](https://github.com/confidential-devhub/kbs-plugin-sdk-python). Implements `PluginHandler` with three methods:
+Built on [kbs-plugin-sdk-python](https://github.com/confidential-devhub/kbs-plugin-sdk-python) ([docs](https://confidential-devhub.github.io/kbs-plugin-sdk-python/)). Implements `PluginHandler` with three methods:
 
 | Method | Returns | Effect |
 |---|---|---|
