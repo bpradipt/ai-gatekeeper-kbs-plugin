@@ -1,6 +1,6 @@
 # AI Gatekeeper — Demo with Real Keycloak
 
-Brings up a complete local stack: Trustee KBS, the ai-gatekeeper gRPC plugin, OPA, and a real Keycloak 26.6.1 instance — then runs the same five access-control test cases used in the e2e suite.
+Brings up a complete local stack: Trustee KBS, the ai-gatekeeper gRPC plugin, OPA, real Keycloak 26.6.1, and two mock OpenAI-compatible model endpoints — then lets you run either the automated assertion tests or a full narrative demo client.
 
 ## Prerequisites
 
@@ -9,12 +9,23 @@ Brings up a complete local stack: Trustee KBS, the ai-gatekeeper gRPC plugin, OP
 
 ## Quick Start
 
+**Automated assertion tests** (pass/fail, used for CI):
+
 ```bash
 cd demo
 make demo
 ```
 
-`make demo` builds all images, starts all services, waits for KBS to become ready, runs five tests, then tears down the stack.
+`make demo` builds all images, starts all services, runs the assertion tests, then tears down the stack.
+
+**Narrative demo client** (six scenarios with visible inputs and outputs, for stakeholders):
+
+```bash
+cd demo
+make up          # start the stack in the background
+make demo-client # run the demo client; re-run as many times as you like
+make down        # tear down when done
+```
 
 First run builds KBS from source (~10–20 min depending on CPU/network). Subsequent runs reuse the image cache.
 
@@ -46,8 +57,11 @@ decrypts the JWE response using `tee.key` — showing the plaintext `endpoint` a
 | `kbs` | 8080 | Trustee Key Broker Service — attestation and plugin proxy |
 | `ai-gatekeeper` | 50051 | gRPC plugin — JWT verify, policy eval, Keycloak token exchange |
 | `opa` | — | OPA server — evaluates the Rego access policy |
+| `llama-8b` | — | Mock OpenAI-compatible endpoint; validates Keycloak JWTs via JWKS |
+| `llama-70b` | — | Mock OpenAI-compatible endpoint; validates Keycloak JWTs via JWKS |
 | `setup` | — | One-shot key generation (RSA, EC, TLS certs) |
-| `test-runner` | — | Python image for JWT generation and JWE decryption |
+| `test-runner` | — | Python image for JWT generation and JWE decryption (used by `make test`) |
+| `demo-client` | — | Six-scenario narrative client (started via `make demo-client` only) |
 
 ## Keycloak Admin Console
 
@@ -60,10 +74,11 @@ The `ai-models` realm and `ai-gatekeeper` client are imported automatically on f
 ## Individual Targets
 
 ```bash
-make up      # Start all services in background (build first)
-make test    # Run tests against a running stack
-make logs    # Follow service logs
-make down    # Stop and remove containers and volumes
+make up           # Start all services in background (build first)
+make test         # Run assertion tests against a running stack
+make demo-client  # Run the six-scenario narrative demo against a running stack
+make logs         # Follow service logs
+make down         # Stop and remove containers and volumes
 ```
 
 ## Tear Down
