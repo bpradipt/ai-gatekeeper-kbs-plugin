@@ -22,12 +22,16 @@ sequenceDiagram
     participant KC as Keycloak
     participant M as Model endpoint
 
-    T->>K: POST /kbs/v0/external/ai-gatekeeper/models/<model><br/>body: {"token": "<kbs-attestation-jwt>"}<br/>Authorization: Bearer <kbs-attestation-token>
+    T->>K: POST /kbs/v0/auth → POST /kbs/v0/attest<br/>(RCAR handshake; initdata TOML carries role in aa.toml[extra])
+    K->>K: Verify initdata hash against TEE evidence; parse initdata → init_data_claims
+    K-->>T: KBS attestation JWT (EAR format; init_data_claims contains role)
+    T->>K: POST /kbs/v0/external/ai-gatekeeper/models/<model><br/>Authorization: Bearer <kbs-attestation-jwt><br/>body: {"token": "<kbs-attestation-jwt>"}
     K->>K: Validate TEE attestation & resource policy
     K->>P: gRPC Handle(request)
-    P->>P: 1. Verify JWT (RS256/ES256 via token signing cert)
-    P->>P: 2. Evaluate Rego policy (role → allowed models)
-    P->>KC: 3. client_credentials grant (model-scoped)
+    P->>P: 1. Verify JWT signature (KBS token cert)
+    P->>P: 2. Normalize EAR claims → {tee_type, init_data_claims, measurement, ...}
+    P->>P: 3. Rego policy: init_data_claims["aa.toml"]["extra"]["role"] → allowed models
+    P->>KC: 4. client_credentials grant (model-scoped)
     KC-->>P: access_token
     P-->>K: {"endpoint": "...", "access_token": "..."}
     K->>K: JWE-encrypt response with TEE ephemeral key
@@ -40,8 +44,20 @@ sequenceDiagram
 
 Two independent layers protect each request:
 
-1. **KBS attestation** — KBS verifies the client completed the RCAR handshake (real or sample TEE evidence). The plugin sets `validate_auth = false`, meaning KBS enforces this before forwarding.
-2. **Plugin JWT** — the plugin independently verifies the KBS-issued attestation JWT from the request body, then evaluates the Rego policy against its claims.
+1. **KBS attestation** — KBS verifies the client completed the RCAR handshake
+   (real or sample TEE evidence). The plugin sets `validate_auth = false`,
+   meaning KBS enforces this before forwarding to the plugin.
+
+2. **Plugin EAR verification** — the plugin independently verifies the KBS-issued
+   EAR attestation JWT from the request body (same JWT as the Bearer token),
+   normalizes the EAR claims, and passes them to Rego. The role is read from
+   `init_data_claims["aa.toml"]["extra"]["role"]` — the parsed content of the
+   initdata TOML the TEE provided at attestation time. On real hardware
+   (TDX/SNP/vTPM), the initdata hash is cryptographically bound to the TEE
+   evidence, so the role cannot be forged after launch.
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the initdata format, normalized claims
+reference, and per-TEE-type configuration guidance.
 
 ## Configuration
 
