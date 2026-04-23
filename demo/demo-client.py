@@ -49,7 +49,8 @@ def attest() -> str:
         check=True,
     )
     token = result.stdout.strip()
-    print(f"  KBS token   : {token[:40]}...")
+    print(f"  KBS attestation token : {token[:40]}...")
+    print(f"  (proves TEE completed RCAR handshake; sent as Bearer on all KBS calls)")
     return token
 
 
@@ -78,13 +79,19 @@ def call_plugin(model: str, plugin_jwt: str, kbs_token: str, tee_key) -> tuple[i
     tok = jwejwe.JWE()
     tok.deserialize(r.text.strip(), tee_key)
     payload = json.loads(tok.payload)
-    print(f"  Plugin      : 200 OK  endpoint={payload['endpoint']}  token={payload['access_token'][:40]}...")
+    kc_claims = pyjwt.decode(payload["access_token"], options={"verify_signature": False})
+    kc_scope = kc_claims.get("scope", "(no scope claim)")
+    print(f"  Plugin      : 200 OK (JWE-encrypted response, decrypted with TEE private key)")
+    print(f"  Endpoint    : {payload['endpoint']}")
+    print(f"  KC token    : {payload['access_token'][:40]}...")
+    print(f"  (Keycloak access token issued to this TEE; scope={kc_scope!r})")
     return 200, payload
 
 
 def call_model(endpoint: str, access_token: str) -> tuple[int, str]:
     url = f"{endpoint}/v1/chat/completions"
     print(f"  Model call  : POST {url}")
+    print(f"  (using Keycloak access token as Bearer; model validates via JWKS)")
     with httpx.Client(timeout=10) as client:
         r = client.post(
             url,
