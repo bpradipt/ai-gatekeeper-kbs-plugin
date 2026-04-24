@@ -106,7 +106,7 @@ services:
       - --config-file
       - /etc/kbs/kbs.toml
     environment:
-      RUST_LOG: "${RUST_LOG:-info}"
+      RUST_LOG: "${RUST_LOG:-debug}"
     ports:
       - "8080:8080"
     volumes:

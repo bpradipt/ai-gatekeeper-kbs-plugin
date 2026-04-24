@@ -76,6 +76,20 @@ def attest(role: str) -> str:
     token = result.stdout.strip()
     print(f"  KBS attestation token (role={role!r}): {token[:40]}...")
     print(f"  (proves TEE completed RCAR handshake; init_data_claims carry role)")
+
+    # Decode the EAR JWT to show init_data_claims — the parsed initdata content
+    # that the plugin reads to derive the role. Signature not verified here
+    # (KBS already verified it; this is display only).
+    try:
+        claims = pyjwt.decode(token, options={"verify_signature": False})
+        idc = (claims.get("submods", {})
+                     .get("cpu0", {})
+                     .get("ear.veraison.annotated-evidence", {})
+                     .get("init_data_claims", {}))
+        print(f"  init_data_claims: {json.dumps(idc, separators=(',', ':'))}")
+    except Exception:
+        pass
+
     return token
 
 
