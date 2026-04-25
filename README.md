@@ -16,28 +16,38 @@ See [`demo/README.md`](demo/README.md) for how to run it locally.
 
 ```mermaid
 sequenceDiagram
-    participant T as TEE client
-    participant K as KBS
-    participant P as ai-gatekeeper plugin
-    participant KC as Keycloak
-    participant M as Model endpoint
+    participant T as "TEE client"
+    participant K as "KBS"
+    participant P as "ai_gatekeeper_plugin"
+    participant KC as "Keycloak"
+    participant M as "Model endpoint"
 
-    T->>K: POST /kbs/v0/auth → POST /kbs/v0/attest<br/>(RCAR handshake; initdata TOML carries role in aa.toml[extra])
-    K->>K: Verify initdata hash against TEE evidence; parse initdata → init_data_claims
-    K-->>T: KBS attestation JWT (EAR format; init_data_claims contains role)
-    T->>K: POST /kbs/v0/external/ai-gatekeeper/models/<model><br/>Authorization: Bearer <kbs-attestation-jwt><br/>body: {"token": "<kbs-attestation-jwt>"}
-    K->>K: Validate TEE attestation & resource policy
-    K->>P: gRPC Handle(request)
-    P->>P: 1. Verify JWT signature (KBS token cert)
-    P->>P: 2. Normalize EAR claims → {tee_type, init_data_claims, measurement, ...}
-    P->>P: 3. Rego policy: init_data_claims["aa.toml"]["extra"]["role"] → allowed models
-    P->>KC: 4. client_credentials grant (model-scoped)
-    KC-->>P: access_token
-    P-->>K: {"endpoint": "...", "access_token": "..."}
-    K->>K: JWE-encrypt response with TEE ephemeral key
-    K-->>T: encrypted response
-    T->>T: Decrypt response
-    T->>M: Request with access_token
+    T->>K: "POST /kbs/v0/auth"
+    K-->>T: "nonce + session cookie"
+
+    T->>K: "POST /kbs/v0/attest (evidence + ephemeral key + initdata TOML)"
+    Note over K: verify initdata hash and parse claims
+    K-->>T: "KBS attestation JWT (EAR with role in init_data_claims)"
+
+    T->>K: "POST /kbs/v0/external/ai-gatekeeper/models/MODEL"
+    Note over T,K: Authorization Bearer KBS-JWT and body token equals KBS-JWT
+    Note over K: validate attestation and policy
+
+    K->>P: "gRPC Handle(request)"
+
+    P->>P: "verify JWT signature"
+    P->>P: "normalize EAR claims"
+    P->>P: "Rego policy check (role)"
+    P->>KC: "client_credentials grant (model scoped)"
+
+    KC-->>P: "access_token"
+    P-->>K: "endpoint + access_token"
+
+    Note over K: "JWE encrypt with TEE ephemeral key"
+    K-->>T: "encrypted response"
+
+    T->>T: "decrypt response"
+    T->>M: "request with access_token"
 ```
 
 ## Authentication Layers
