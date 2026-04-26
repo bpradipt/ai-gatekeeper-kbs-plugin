@@ -21,7 +21,7 @@ _FAKE_EAR = {
                 "sample": {"launch_digest": "abcde", "debug": False},
                 "init_data": "IWjlrrHiZjz0SmFAWXDdSbqZcnLytZIOVGNgYJzv4b8",
                 "init_data_claims": {
-                    "aa.toml": {"extra": {"role": "basic"}}
+                    "role": "basic"
                 },
             },
         }
@@ -33,7 +33,7 @@ _NORMALIZED = {
     "tee_type": "sample",
     "ear_status": "affirming",
     "init_data_hash": "IWjlrrHiZjz0SmFAWXDdSbqZcnLytZIOVGNgYJzv4b8",
-    "init_data_claims": {"aa.toml": {"extra": {"role": "basic"}}},
+    "init_data_claims": {"role": "basic"},
     "measurement": "abcde",
     "debug": False,
 }

@@ -61,7 +61,7 @@ def test_init_data_hash_absent_is_none():
 
 
 def test_init_data_claims_present():
-    claims = {"aa.toml": {"extra": {"role": "basic"}}}
+    claims = {"role": "basic"}
     ear = _ear("sample", {"launch_digest": "abcde"}, init_data="abc123")
     # inject init_data_claims into annotated evidence
     ear["submods"]["cpu0"]["ear.veraison.annotated-evidence"]["init_data_claims"] = claims

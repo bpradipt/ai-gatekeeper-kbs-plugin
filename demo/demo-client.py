@@ -22,18 +22,28 @@ TEE_KEY_PATH = "/keys/tee.key"
 
 
 def _initdata(role: str) -> str:
-    return f'''version = "0.1.0"
+    tq = "'''"
+    return f"""\
 algorithm = "sha256"
+version = "0.1.0"
 
 [data]
-"aa.toml" = """
+role = "{role}"
+"aa.toml" = {tq}
 [token_configs.kbs]
 url = "{KBS_URL}"
+{tq}
+"cdh.toml" = {tq}
+socket = 'unix:///run/confidential-containers/cdh.sock'
+credentials = []
 
-[extra]
-role = "{role}"
+[kbc]
+name = "cc_kbc"
+url = "{KBS_URL}"
+{tq}
+"policy.rego" = {tq}
+{tq}
 """
-'''
 
 
 SEP = "━" * 50
@@ -64,7 +74,7 @@ def attest(role: str) -> str:
     The initdata TOML is structured per the CoCo initdata spec (version 0.1.0).
     KBS parses the plaintext and exposes it as init_data_claims in the EAR JWT.
     The plugin's Rego policy reads the role from:
-      init_data_claims["aa.toml"]["extra"]["role"]
+      init_data_claims["role"]
 
     On real hardware (TDX/SNP), the initdata hash is cryptographically bound to
     the TEE measurement register — the workload cannot forge a different role
@@ -99,7 +109,7 @@ def call_plugin(model: str, kbs_token: str, tee_key) -> tuple[int, dict | None]:
 
     The KBS attestation JWT is used both as the Bearer token (KBS validates
     TEE attestation) and as the body token (plugin verifies and normalizes
-    EAR claims, reads role from init_data_claims["aa.toml"]["extra"]["role"],
+    EAR claims, reads role from init_data_claims["role"],
     fetches Keycloak token).
     """
     url = f"{KBS_URL}/kbs/v0/external/ai-gatekeeper/models/{model}"

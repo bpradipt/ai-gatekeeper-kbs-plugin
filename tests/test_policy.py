@@ -21,9 +21,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 # Helper: build the init_data_claims dict for a given role.
-# Mirrors the initdata TOML [data."aa.toml"."extra"] structure.
+# Role is a top-level key in the initdata TOML, not nested under [data].
 def _claims(role: str) -> dict:
-    return {"init_data_claims": {"aa.toml": {"extra": {"role": role}}}}
+    return {"init_data_claims": {"role": role}}
 
 
 def _allow(claims: dict, model: str) -> bool:
@@ -76,8 +76,8 @@ def test_missing_init_data_claims_denied():
     assert _allow({}, "llama-8b") is False
 
 
-def test_missing_role_in_extra_denied():
-    claims = {"init_data_claims": {"aa.toml": {"extra": {}}}}
+def test_missing_role_denied():
+    claims = {"init_data_claims": {}}
     assert _allow(claims, "llama-8b") is False
 
 

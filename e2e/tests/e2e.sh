@@ -51,40 +51,62 @@ setup_policy
 # The same JWT is used as both Bearer (KBS TEE attestation) and body token
 # (plugin EAR claim normalization and role derivation).
 echo "Obtaining KBS attestation token with basic role (initdata TOML)..."
+INITDATA_BASIC=$(cat <<'TOML'
+algorithm = "sha256"
+version = "0.1.0"
+
+[data]
+role = "basic"
+"aa.toml" = '''
+[token_configs.kbs]
+url = "http://localhost:8080"
+'''
+"cdh.toml" = '''
+socket = 'unix:///run/confidential-containers/cdh.sock'
+credentials = []
+
+[kbc]
+name = "cc_kbc"
+url = "http://localhost:8080"
+'''
+"policy.rego" = '''
+'''
+TOML
+)
 KBS_TOKEN_BASIC=$(docker compose exec -T kbs kbs-client \
     --url http://localhost:8080 \
     attest \
     --tee-key-file /opt/confidential-containers/kbs/user-keys/tee.key \
-    'version = "0.1.0"
-algorithm = "sha256"
-
-[data]
-"aa.toml" = """
-[token_configs.kbs]
-url = "http://localhost:8080"
-
-[extra]
-role = "basic"
-"""
-')
+    "$INITDATA_BASIC")
 
 echo "Obtaining KBS attestation token with premium role (initdata TOML)..."
+INITDATA_PREMIUM=$(cat <<'TOML'
+algorithm = "sha256"
+version = "0.1.0"
+
+[data]
+role = "premium"
+"aa.toml" = '''
+[token_configs.kbs]
+url = "http://localhost:8080"
+'''
+"cdh.toml" = '''
+socket = 'unix:///run/confidential-containers/cdh.sock'
+credentials = []
+
+[kbc]
+name = "cc_kbc"
+url = "http://localhost:8080"
+'''
+"policy.rego" = '''
+'''
+TOML
+)
 KBS_TOKEN_PREMIUM=$(docker compose exec -T kbs kbs-client \
     --url http://localhost:8080 \
     attest \
     --tee-key-file /opt/confidential-containers/kbs/user-keys/tee.key \
-    'version = "0.1.0"
-algorithm = "sha256"
-
-[data]
-"aa.toml" = """
-[token_configs.kbs]
-url = "http://localhost:8080"
-
-[extra]
-role = "premium"
-"""
-')
+    "$INITDATA_PREMIUM")
 
 echo ""
 echo "Running e2e tests against $KBS_URL"

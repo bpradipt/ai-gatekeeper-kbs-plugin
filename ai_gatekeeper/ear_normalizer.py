@@ -16,10 +16,10 @@ Normalized output fields (the operator contract):
                                 vTPM). None if no initdata was provided.
   init_data_claims dict | None  Parsed content of the initdata TOML, present only when the
                                 client passes the initdata plaintext to KBS at attestation
-                                time. Contains sub-keys matching the [data] section of the
-                                initdata TOML (e.g. "aa.toml", "cdh.toml"). Custom fields
-                                placed inside those config files are preserved. Example:
-                                  init_data_claims["aa.toml"]["extra"]["role"] == "basic"
+                                time. Top-level key=value pairs (e.g. role) appear directly;
+                                config files in the [data] section appear under their
+                                filenames (e.g. "aa.toml", "cdh.toml"). Example:
+                                  init_data_claims["role"] == "basic"
                                 Works identically on sample TEE, TDX, SNP, and vTPM.
   measurement      str | None   Primary measurement register, TEE-type-specific:
                                   sample → launch_digest

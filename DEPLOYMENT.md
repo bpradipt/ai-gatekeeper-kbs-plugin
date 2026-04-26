@@ -24,7 +24,7 @@ TEE hardware evidence
         │
         ▼ KBS verifies hash and parses plaintext
 init_data_claims in EAR JWT
-  ["aa.toml"]["extra"]["role"] = "basic" | "premium" | "research"
+  ["role"] = "basic" | "premium" | "research"
         │
         ▼ Rego policy
 allow / deny
@@ -37,20 +37,30 @@ after launch.
 ## Initdata Format
 
 The initdata passed to `kbs-client attest` must follow the CoCo initdata spec
-(version `0.1.0`). The role is placed in the `[extra]` section of `aa.toml`:
+(version `0.1.0`). Arbitrary metadata such as `role` is placed as plain
+key=value pairs directly inside the `[data]` section, alongside the config
+file entries:
 
 ```toml
-version = "0.1.0"
 algorithm = "sha256"
+version = "0.1.0"
 
 [data]
-"aa.toml" = """
+role = "basic"   # or "premium", "research", ...
+"aa.toml" = '''
 [token_configs.kbs]
 url = "http://<kbs-host>:<port>"
+'''
+"cdh.toml" = '''
+socket = 'unix:///run/confidential-containers/cdh.sock'
+credentials = []
 
-[extra]
-role = "basic"   # or "premium", "research", ...
-"""
+[kbc]
+name = "cc_kbc"
+url = "http://<kbs-host>:<port>"
+'''
+"policy.rego" = '''
+'''
 ```
 
 The `algorithm` field (`sha256`, `sha384`, or `sha512`) determines which hash
@@ -65,7 +75,7 @@ The plugin exposes these fields to Rego as `input.claims`:
 | `tee_type` | `string \| null` | TEE platform: `"tdx"`, `"snp"`, `"sgx"`, `"sample"`, ... |
 | `ear_status` | `string \| null` | EAR verdict: `"affirming"`, `"warning"`, `"contraindicated"` |
 | `init_data_hash` | `string \| null` | Hash of the initdata blob from the hardware register; `null` if no initdata was provided |
-| `init_data_claims` | `dict \| null` | Parsed content of the initdata TOML; `null` if no initdata plaintext was provided. Contains sub-keys matching the `[data]` section (e.g. `"aa.toml"`, `"cdh.toml"`) |
+| `init_data_claims` | `dict \| null` | Parsed content of the initdata TOML; `null` if no initdata plaintext was provided. Plain keys in `[data]` (e.g. `role`) appear directly; file entries appear under their filenames (e.g. `"aa.toml"`) |
 | `measurement` | `string \| null` | Primary measurement register (see table below) |
 | `debug` | `bool \| null` | Debug mode flag from TEE evidence |
 
@@ -84,7 +94,7 @@ The Rego policy reads the role from `init_data_claims`:
 
 ```rego
 role := r if {
-    r := input.claims.init_data_claims["aa.toml"]["extra"]["role"]
+    r := input.claims.init_data_claims["role"]
 }
 
 allow if {
@@ -92,9 +102,9 @@ allow if {
 }
 ```
 
-You can place any fields you need in the `[extra]` section of `aa.toml` in the
-initdata TOML. You can also add other files to the `[data]` section — their
-parsed content will appear under the corresponding key in `init_data_claims`.
+You can place any plain key=value pairs directly in `[data]` alongside the
+file entries (e.g. `department = "research"`, `tier = "3"`). They will appear
+directly in `init_data_claims` alongside the parsed file contents.
 
 ## Per-TEE-Type Configuration
 

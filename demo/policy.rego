@@ -10,19 +10,19 @@ default allow := false
 # On sample TEE (testing only) the hash is not hardware-verified.
 #
 # Initdata format (passed as plaintext to kbs-client attest):
-#   version = "0.1.0"
 #   algorithm = "sha256"
+#   version = "0.1.0"
+#
 #   [data]
-#   "aa.toml" = """
+#   role = "basic"   # or "premium", "research", ...
+#   "aa.toml" = '''
 #   [token_configs.kbs]
 #   url = "http://<kbs-host>:<port>"
-#   [extra]
-#   role = "basic"   # or "premium", "research", ...
-#   """
+#   '''
 #
 # See DEPLOYMENT.md for hash computation and per-TEE-type guidance.
 role := r if {
-    r := input.claims.init_data_claims["aa.toml"]["extra"]["role"]
+    r := input.claims.init_data_claims["role"]
 }
 
 allow if {
